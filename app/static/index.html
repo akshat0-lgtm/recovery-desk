@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recovery Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <a href="/" class="home-link" data-nav="home"><h1>Recovery Desk</h1></a>
+    <span class="sub" id="modelInfo">Subrogation agent</span>
+  </div>
+  <div class="clock">
+    <span class="label">Desk date</span><b class="num" id="deskDate">—</b>
+    <button class="btn sm" data-clock="7">+7 days</button>
+    <button class="btn sm" data-clock="30">+30 days</button>
+    <span class="pill s-run" id="advancing" hidden>Clock moving</span>
+  </div>
+</header>
+
+<main class="page" id="homeView">
+  <section class="controls">
+    <div class="control">
+      <label for="settle" class="label">Agent settles at or above</label>
+      <div class="slider"><input type="range" id="settle" min="50" max="100" step="1" value="85"><b class="num" id="settleVal">85%</b></div>
+      <span class="sub">of the demand. Lower offers come to you.</span>
+    </div>
+    <div class="control">
+      <label for="autosend" class="label">Send demands automatically up to</label>
+      <div class="row"><span class="prefix">$</span><input type="number" id="autosend" min="0" step="1000" value="25000"><button class="btn sm" id="saveAuto">Save</button></div>
+      <span class="sub">Larger demands wait for your approval. 0 = always ask.</span>
+    </div>
+    <div class="control intake">
+      <label class="drop" id="drop" for="fileInput"><input type="file" id="fileInput" accept="application/pdf" hidden>
+        <b>Upload a closed claim file</b><span>PDF: notes, police report, estimate, invoices, ledger</span></label>
+      <div class="row"><button class="btn sm" id="loadAll">Load demo book (11 files)</button><select id="sampleSel" aria-label="Sample file"></select><button class="btn sm" id="sampleBtn">Run one</button></div>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section>
+    <div class="sechead"><h2>Needs you</h2><span class="sub">Only what the agent can't or shouldn't decide alone.</span></div>
+    <div class="needs" id="needs"></div>
+  </section>
+
+  <section>
+    <div class="sechead"><h2>Pipeline</h2><span class="sub">Everything the agent is handling. Move the clock to see carriers reply.</span><button class="btn sm ghost" id="resetDemo">Reset demo</button></div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section>
+    <div class="sechead"><h2>Payments feed</h2><span class="sub">Bank feed (simulated). The agent matches each payment to a claim.</span></div>
+    <div class="panel"><div class="tablewrap" id="payments"></div></div>
+  </section>
+</main>
+
+<main class="page" id="caseView" hidden></main>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b id="modalTitle"></b><button class="btn sm" id="modalClose">Close</button></div>
+    <pre id="modalBody"></pre>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

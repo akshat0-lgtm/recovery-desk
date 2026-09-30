@@ -1,0 +1,56 @@
+"""Runtime configuration, read once from environment variables."""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from datetime import date
+
+
+@dataclass(frozen=True)
+class Settings:
+    database_url: str
+    llm_provider: str
+    llm_model: str
+    llm_api_key: str
+    llm_base_url: str
+    llm_tool_mode: str
+    app_password: str
+    desk_date: str
+    max_upload_mb: int
+    max_agent_rounds: int
+
+    def today(self) -> date:
+        """The desk's 'today'. Pinned by DESK_DATE for demos, else the real date."""
+        if self.desk_date:
+            return date.fromisoformat(self.desk_date)
+        return date.today()
+
+
+def _db_url() -> str:
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        return "sqlite:///./recovery_desk.db"
+    # Render and Heroku hand out postgres:// URLs; SQLAlchemy wants a driver name.
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+def load() -> Settings:
+    return Settings(
+        database_url=_db_url(),
+        llm_provider=os.getenv("LLM_PROVIDER", "anthropic").strip().lower(),
+        llm_model=os.getenv("LLM_MODEL", "claude-sonnet-5-5").strip(),
+        llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
+        llm_base_url=os.getenv("LLM_BASE_URL", "").strip(),
+        llm_tool_mode=os.getenv("LLM_TOOL_MODE", "native").strip().lower(),
+        app_password=os.getenv("APP_PASSWORD", "").strip(),
+        desk_date=os.getenv("DESK_DATE", "").strip(),
+        max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "25")),
+        max_agent_rounds=int(os.getenv("MAX_AGENT_ROUNDS", "8")),
+    )
+
+
+settings = load()
