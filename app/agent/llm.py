@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -109,15 +112,62 @@ class AnthropicConversation:
         self.messages.append({"role": "user", "content": text})
 
 
+# --------------------------------------------------------------------------- rate limiting
+class TokenThrottle:
+    """Client-side tokens-per-minute budget, per model. Providers like Groq count input + output
+    tokens per model per minute, so we wait here instead of burning calls on 429s."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.used: dict[str, deque] = defaultdict(deque)  # model -> (timestamp, tokens)
+
+    def _spent(self, model: str, now: float) -> int:
+        q = self.used[model]
+        while q and now - q[0][0] > 60:
+            q.popleft()
+        return sum(n for _, n in q)
+
+    def wait(self, model: str, need: int, budget: int) -> None:
+        while True:
+            with self.lock:
+                now = time.time()
+                spent = self._spent(model, now)
+                if spent == 0 or spent + need <= budget:
+                    self.used[model].append((now, need))  # reserve; corrected by record()
+                    return
+                sleep = max(1.0, 60 - (now - self.used[model][0][0]) + 0.5)
+            time.sleep(min(sleep, 20))
+
+    def record(self, model: str, reserved: int, actual: int) -> None:
+        with self.lock:
+            q = self.used[model]
+            for i in range(len(q) - 1, -1, -1):
+                if q[i][1] == reserved:
+                    q[i] = (q[i][0], actual)
+                    break
+
+
+throttle = TokenThrottle()
+
+
+def _retry_after(msg: str, attempt: int) -> float:
+    m = re.search(r"try again in ([\d.]+)(ms|s|m)", msg)
+    if m:
+        v = float(m.group(1)) * {"ms": 0.001, "s": 1, "m": 60}[m.group(2)]
+        return min(v + 1, 60)
+    return min(2 ** attempt * 2, 30)
+
+
 # --------------------------------------------------------------------------- OpenAI-compatible
 class OpenAICompatConversation:
     def __init__(self, s: Settings, system: str, user: str, tools: list[ToolSpec]):
         from openai import OpenAI
 
-        self.client = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None, max_retries=5)
+        self.client = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None, max_retries=0)
         self.model = s.llm_model
         self.max_tokens = s.llm_max_tokens
-        self.fallback = s.llm_fallback_model
+        self.fallbacks = [m.strip() for m in s.llm_fallback_model.split(",") if m.strip()]
+        self.tpm_budget = s.llm_tpm_budget
         self.effort = s.llm_reasoning_effort
         self.tools = [
             {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": plain_schema(t.schema)}}
@@ -129,23 +179,36 @@ class OpenAICompatConversation:
         kw = {}
         if self.effort in ("low", "medium", "high") and "gpt-oss" in self.model:
             kw["extra_body"] = {"reasoning_effort": self.effort}  # fewer hidden reasoning tokens
-        return self.client.chat.completions.create(
+        est = len(json.dumps(self.messages)) // 3 + len(json.dumps(self.tools)) // 3 + self.max_tokens
+        throttle.wait(self.model, est, self.tpm_budget)
+        r = self.client.chat.completions.create(
             model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=self.max_tokens, **kw
         )
+        used = getattr(getattr(r, "usage", None), "total_tokens", None)
+        if used:
+            throttle.record(self.model, est, used)
+        return r
 
     def send(self) -> Turn:
-        try:
+        fallbacks = [m for m in self.fallbacks if m != self.model]
+        attempt = 0
+        while True:
             try:
                 r = self._create()
+                break
             except Exception as e:
-                # Each model has its own rate limit: on a 429, move this run to the fallback model.
-                if "429" in str(e) and self.fallback and self.fallback != self.model:
-                    self.model = self.fallback
-                    r = self._create()
+                msg = str(e)
+                if "429" not in msg and "rate_limit" not in msg and "503" not in msg and "overloaded" not in msg.lower():
+                    raise ProviderError(f"Model API error: {e}") from e
+                attempt += 1
+                too_large = "too large" in msg.lower()
+                if not too_large and attempt <= 3:
+                    time.sleep(_retry_after(msg, attempt))  # a short wait usually clears a per-minute limit
+                elif fallbacks:
+                    self.model = fallbacks.pop(0)  # each model has its own limits
+                    attempt = 0
                 else:
-                    raise
-        except Exception as e:
-            raise ProviderError(f"Model API error: {e}") from e
+                    raise ProviderError(f"Model API error (rate limited on every model): {e}") from e
         m = r.choices[0].message
         calls = []
         for tc in m.tool_calls or []:

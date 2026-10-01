@@ -18,6 +18,7 @@ class Settings:
     llm_stage_models: dict
     llm_fallback_model: str
     llm_reasoning_effort: str
+    llm_tpm_budget: int
     app_password: str
     desk_date: str
     max_upload_mb: int
@@ -42,9 +43,10 @@ def _db_url() -> str:
     return url
 
 
-# Free-tier Groq defaults: the big model only where judgment or long structured output matters.
-_GROQ_STAGE_MODELS = "0=openai/gpt-oss-120b,1=openai/gpt-oss-20b,2=openai/gpt-oss-20b,3=openai/gpt-oss-120b," \
-                     "5=openai/gpt-oss-120b,6=openai/gpt-oss-20b"
+# Free-tier Groq defaults: Qwen for the heavy stages (intake, build, negotiate), gpt-oss-120b for the rest.
+# Groq limits tokens per model, so spreading stages across models spreads the quota.
+_GROQ_STAGE_MODELS = "0=qwen/qwen3.8-27b,1=openai/gpt-oss-120b,2=openai/gpt-oss-120b,3=qwen/qwen3.8-27b," \
+                     "5=qwen/qwen3.8-27b,6=openai/gpt-oss-120b"
 
 
 def _stage_models(provider: str) -> dict:
@@ -67,14 +69,15 @@ def load() -> Settings:
     return Settings(
         database_url=_db_url(),
         llm_provider=provider,
-        llm_model=os.getenv("LLM_MODEL", "openai/gpt-oss-20b").strip(),
+        llm_model=os.getenv("LLM_MODEL", "openai/gpt-oss-120b").strip(),
         llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
         llm_base_url=os.getenv("LLM_BASE_URL", default_base).strip(),
         llm_tool_mode=os.getenv("LLM_TOOL_MODE", "native").strip().lower(),
-        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "2500")),
         llm_stage_models=_stage_models(provider),
-        llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-20b" if provider == "openai_compat" else "").strip(),
+        llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-120b,openai/gpt-oss-20b" if provider == "openai_compat" else "").strip(),
         llm_reasoning_effort=os.getenv("LLM_REASONING_EFFORT", "low").strip().lower(),
+        llm_tpm_budget=int(os.getenv("LLM_TPM_BUDGET", "7000")),
         app_password=os.getenv("APP_PASSWORD", "").strip(),
         desk_date=os.getenv("DESK_DATE", "").strip(),
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "25")),
