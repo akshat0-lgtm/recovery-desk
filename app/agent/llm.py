@@ -179,7 +179,7 @@ class OpenAICompatConversation:
         kw = {}
         if self.effort in ("low", "medium", "high") and "gpt-oss" in self.model:
             kw["extra_body"] = {"reasoning_effort": self.effort}  # fewer hidden reasoning tokens
-        est = len(json.dumps(self.messages)) // 3 + len(json.dumps(self.tools)) // 3 + self.max_tokens
+        est = len(json.dumps(self.messages)) // 3 + len(json.dumps(self.tools)) // 3 + min(self.max_tokens, 600)  # Groq counts tokens actually used, not the cap
         throttle.wait(self.model, est, self.tpm_budget)
         r = self.client.chat.completions.create(
             model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=self.max_tokens, **kw

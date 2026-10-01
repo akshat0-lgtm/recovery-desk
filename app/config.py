@@ -77,7 +77,7 @@ def load() -> Settings:
         llm_stage_models=_stage_models(provider),
         llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-120b,openai/gpt-oss-20b" if provider == "openai_compat" else "").strip(),
         llm_reasoning_effort=os.getenv("LLM_REASONING_EFFORT", "low").strip().lower(),
-        llm_tpm_budget=int(os.getenv("LLM_TPM_BUDGET", "7000")),
+        llm_tpm_budget=int(os.getenv("LLM_TPM_BUDGET", "7600")),
         app_password=os.getenv("APP_PASSWORD", "").strip(),
         desk_date=os.getenv("DESK_DATE", "").strip(),
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "25")),
