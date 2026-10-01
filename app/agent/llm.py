@@ -75,6 +75,7 @@ class AnthropicConversation:
             raise ProviderError("LLM_API_KEY is not set")
         self.client = anthropic.Anthropic(api_key=s.llm_api_key, base_url=s.llm_base_url or None)
         self.model = s.llm_model
+        self.max_tokens = s.llm_max_tokens
         self.system = system
         self.tools = [{"name": t.name, "description": t.description, "input_schema": t.schema} for t in tools]
         self.messages: list[dict] = [{"role": "user", "content": user}]
@@ -82,7 +83,7 @@ class AnthropicConversation:
     def send(self) -> Turn:
         try:
             r = self.client.messages.create(
-                model=self.model, max_tokens=4096, system=self.system, messages=self.messages, tools=self.tools
+                model=self.model, max_tokens=self.max_tokens, system=self.system, messages=self.messages, tools=self.tools
             )
         except Exception as e:  # network, auth, rate limit
             raise ProviderError(f"Anthropic API error: {e}") from e
@@ -113,8 +114,9 @@ class OpenAICompatConversation:
     def __init__(self, s: Settings, system: str, user: str, tools: list[ToolSpec]):
         from openai import OpenAI
 
-        self.client = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None)
+        self.client = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None, max_retries=5)
         self.model = s.llm_model
+        self.max_tokens = s.llm_max_tokens
         self.tools = [
             {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": plain_schema(t.schema)}}
             for t in tools
@@ -124,7 +126,7 @@ class OpenAICompatConversation:
     def send(self) -> Turn:
         try:
             r = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=4096
+                model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=self.max_tokens
             )
         except Exception as e:
             raise ProviderError(f"Model API error: {e}") from e
@@ -183,13 +185,13 @@ class JSONModeConversation:
                 import anthropic
 
                 r = anthropic.Anthropic(api_key=s.llm_api_key, base_url=s.llm_base_url or None).messages.create(
-                    model=s.llm_model, max_tokens=4096, system=self.system, messages=self.messages
+                    model=s.llm_model, max_tokens=s.llm_max_tokens, system=self.system, messages=self.messages
                 )
                 return "".join(b.text for b in r.content if b.type == "text")
             from openai import OpenAI
 
             r = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None).chat.completions.create(
-                model=s.llm_model, messages=[{"role": "system", "content": self.system}, *self.messages], max_tokens=4096
+                model=s.llm_model, messages=[{"role": "system", "content": self.system}, *self.messages], max_tokens=s.llm_max_tokens
             )
             return r.choices[0].message.content or ""
         except Exception as e:

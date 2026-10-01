@@ -14,6 +14,7 @@ class Settings:
     llm_api_key: str
     llm_base_url: str
     llm_tool_mode: str
+    llm_max_tokens: int
     app_password: str
     desk_date: str
     max_upload_mb: int
@@ -49,6 +50,7 @@ def load() -> Settings:
         llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
         llm_base_url=os.getenv("LLM_BASE_URL", default_base).strip(),
         llm_tool_mode=os.getenv("LLM_TOOL_MODE", "native").strip().lower(),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
         app_password=os.getenv("APP_PASSWORD", "").strip(),
         desk_date=os.getenv("DESK_DATE", "").strip(),
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "25")),
