@@ -117,17 +117,33 @@ class OpenAICompatConversation:
         self.client = OpenAI(api_key=s.llm_api_key or "not-needed", base_url=s.llm_base_url or None, max_retries=5)
         self.model = s.llm_model
         self.max_tokens = s.llm_max_tokens
+        self.fallback = s.llm_fallback_model
+        self.effort = s.llm_reasoning_effort
         self.tools = [
             {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": plain_schema(t.schema)}}
             for t in tools
         ]
         self.messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
+    def _create(self):
+        kw = {}
+        if self.effort in ("low", "medium", "high") and "gpt-oss" in self.model:
+            kw["extra_body"] = {"reasoning_effort": self.effort}  # fewer hidden reasoning tokens
+        return self.client.chat.completions.create(
+            model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=self.max_tokens, **kw
+        )
+
     def send(self) -> Turn:
         try:
-            r = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, tools=self.tools, tool_choice="auto", max_tokens=self.max_tokens
-            )
+            try:
+                r = self._create()
+            except Exception as e:
+                # Each model has its own rate limit: on a 429, move this run to the fallback model.
+                if "429" in str(e) and self.fallback and self.fallback != self.model:
+                    self.model = self.fallback
+                    r = self._create()
+                else:
+                    raise
         except Exception as e:
             raise ProviderError(f"Model API error: {e}") from e
         m = r.choices[0].message

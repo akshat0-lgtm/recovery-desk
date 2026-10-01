@@ -5,6 +5,7 @@ model as a tool error and the model must correct itself. Every step is written t
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 from dataclasses import dataclass
@@ -41,9 +42,12 @@ def run_agent(case_id: str, stage: int, system: str, user: str, tools: list[Tool
     """Runs one stage's agent. Returns the accepted terminal tool's result."""
     by_name = {t.name: t for t in tools}
     specs = [llm.ToolSpec(t.name, t.description, t.schema) for t in tools]
-    convo = llm.conversation_factory(settings, system, user, specs)
-    db.add_event(case_id, stage, "model", "run_started", {"model": settings.llm_model, "provider": settings.llm_provider,
-                                                          "tool_mode": settings.llm_tool_mode})
+    cfg = settings
+    if stage in settings.llm_stage_models:
+        cfg = dataclasses.replace(settings, llm_model=settings.llm_stage_models[stage])
+    convo = llm.conversation_factory(cfg, system, user, specs)
+    db.add_event(case_id, stage, "model", "run_started", {"model": cfg.llm_model, "provider": cfg.llm_provider,
+                                                          "tool_mode": cfg.llm_tool_mode})
     nudged = False
     for round_no in range(1, settings.max_agent_rounds + 1):
         t0 = time.time()

@@ -15,6 +15,9 @@ class Settings:
     llm_base_url: str
     llm_tool_mode: str
     llm_max_tokens: int
+    llm_stage_models: dict
+    llm_fallback_model: str
+    llm_reasoning_effort: str
     app_password: str
     desk_date: str
     max_upload_mb: int
@@ -39,6 +42,24 @@ def _db_url() -> str:
     return url
 
 
+# Free-tier Groq defaults: the big model only where judgment or long structured output matters.
+_GROQ_STAGE_MODELS = "0=openai/gpt-oss-120b,1=openai/gpt-oss-20b,2=openai/gpt-oss-20b,3=openai/gpt-oss-120b," \
+                     "5=openai/gpt-oss-120b,6=openai/gpt-oss-20b"
+
+
+def _stage_models(provider: str) -> dict:
+    raw = os.getenv("LLM_STAGE_MODELS")
+    if raw is None:
+        raw = _GROQ_STAGE_MODELS if provider == "openai_compat" else ""
+    out = {}
+    for part in raw.split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            if k.strip().isdigit() and v.strip():
+                out[int(k)] = v.strip()
+    return out
+
+
 def load() -> Settings:
     provider = os.getenv("LLM_PROVIDER", "openai_compat").strip().lower()
     # Groq is the default endpoint for the default provider; other providers set their own.
@@ -46,11 +67,14 @@ def load() -> Settings:
     return Settings(
         database_url=_db_url(),
         llm_provider=provider,
-        llm_model=os.getenv("LLM_MODEL", "qwen/qwen3.8-27b").strip(),
+        llm_model=os.getenv("LLM_MODEL", "openai/gpt-oss-20b").strip(),
         llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
         llm_base_url=os.getenv("LLM_BASE_URL", default_base).strip(),
         llm_tool_mode=os.getenv("LLM_TOOL_MODE", "native").strip().lower(),
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
+        llm_stage_models=_stage_models(provider),
+        llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL", "openai/gpt-oss-20b" if provider == "openai_compat" else "").strip(),
+        llm_reasoning_effort=os.getenv("LLM_REASONING_EFFORT", "low").strip().lower(),
         app_password=os.getenv("APP_PASSWORD", "").strip(),
         desk_date=os.getenv("DESK_DATE", "").strip(),
         max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "25")),
