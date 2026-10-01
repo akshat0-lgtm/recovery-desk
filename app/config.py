@@ -39,12 +39,15 @@ def _db_url() -> str:
 
 
 def load() -> Settings:
+    provider = os.getenv("LLM_PROVIDER", "openai_compat").strip().lower()
+    # Groq is the default endpoint for the default provider; other providers set their own.
+    default_base = "https://api.groq.com/openai/v1" if provider == "openai_compat" else ""
     return Settings(
         database_url=_db_url(),
-        llm_provider=os.getenv("LLM_PROVIDER", "anthropic").strip().lower(),
-        llm_model=os.getenv("LLM_MODEL", "claude-sonnet-5-5").strip(),
+        llm_provider=provider,
+        llm_model=os.getenv("LLM_MODEL", "qwen/qwen3.8-27b").strip(),
         llm_api_key=os.getenv("LLM_API_KEY", "").strip(),
-        llm_base_url=os.getenv("LLM_BASE_URL", "").strip(),
+        llm_base_url=os.getenv("LLM_BASE_URL", default_base).strip(),
         llm_tool_mode=os.getenv("LLM_TOOL_MODE", "native").strip().lower(),
         app_password=os.getenv("APP_PASSWORD", "").strip(),
         desk_date=os.getenv("DESK_DATE", "").strip(),

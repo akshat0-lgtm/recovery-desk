@@ -61,7 +61,7 @@ Open http://localhost:8000. Without `DATABASE_URL` it uses a local SQLite file.
 
 1. Push this folder to a GitHub repo.
 2. Render → **New → Blueprint** → pick the repo. `render.yaml` creates the web service and a Postgres database.
-3. Set `LLM_API_KEY` (and `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL` if not Claude). Set `APP_PASSWORD` to protect the demo (username `desk`).
+3. Set `LLM_API_KEY` (and `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL` if not Claude). Defaults to Groq + Qwen. Sign-in is off unless you add `APP_PASSWORD` (username `desk`).
 4. Open the URL. Health check: `/api/health` (shows provider, model, and whether a key is set).
 
 Free plans sleep when idle; use a paid plan for anything you keep.
